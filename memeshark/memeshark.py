@@ -69,7 +69,7 @@ class MemeSHARK(object):
 
         ces_current_state = {}
         for ces in CodeEntityState.objects(commit_id=node):
-            ces_current_state[ces.long_name] = ces
+            ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
 
         self._add_ces_to_commit(node, ces_current_state)
 
@@ -90,17 +90,17 @@ class MemeSHARK(object):
             ces_unchanged = []     # stores CES to be deleted
 
             for ces in CodeEntityState.objects(commit_id=node):
-                if ces.long_name not in ces_past_state:
-                    ces_current_state[ces.long_name] = ces
+                if ces.long_name+ces.file_id.__str__() not in ces_past_state:
+                    ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
                     ces_map[ces.id] = ces.id
                 else:
-                    ces_past = ces_past_state[ces.long_name]
+                    ces_past = ces_past_state[ces.long_name+ces.file_id.__str__()]
                     old, new = self._compare_djangoobjects(ces_past, ces, {'id','s_key','commit_id','ce_parent_id','cg_ids'})
                     if len(new.keys())>0 or len(old.keys())>0:
-                        ces_current_state[ces.long_name] = ces
+                        ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
                         ces_map[ces.id] = ces.id
                     else:
-                        ces_current_state[ces.long_name] = ces_past
+                        ces_current_state[ces.long_name+ces.file_id.__str__()] = ces_past
                         ces_map[ces.id] = ces_past.id
                         ces_unchanged.append(ces.id)
 
@@ -112,7 +112,7 @@ class MemeSHARK(object):
                         # do not delete currently referenced parents
                         ces_unchanged.remove(ces.ce_parent_id)
                         ces_parent = CodeEntityState.objects(id=ces.ce_parent_id).get()
-                        ces_current_state[ces_parent.long_name] = ces_parent
+                        ces_current_state[ces_parent.long_name+ces_parent.file_id.__str__()] = ces_parent
                         updated_current_state = True
                         break
 
@@ -139,21 +139,10 @@ class MemeSHARK(object):
         for i, ces in ces_current_state.items():
             if ces.commit_id!=node:
                 continue # skip CES from previous commits
-            had_changes = False
+
             # updated CES references
             if ces.ce_parent_id in ces_unchanged:
                 ces.ce_parent_id = ces_map[ces.ce_parent_id]
-                had_changes = True
-
-            # update CG references
-            # cur_cg_ids = ces.cg_ids
-            # for j, cg in enumerate(cur_cg_ids):
-            #     if cg in cg_unchanged:
-            #         cur_cg_ids[j] = cg_map[cg]
-            #         had_changes = True
-            # ces.cg_ids = cur_cg_ids
-
-            if had_changes:
                 ces.save()
 
     def _delete_unchanged_ces(self, ces_unchanged, no_ces):

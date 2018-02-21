@@ -91,7 +91,7 @@ def start():
         ces_verbose_by_id = {}
         with switch_db(CodeEntityState, 'db-verbose') as CodeEntityStateVerbose:
             for cur_ces_verbose in CodeEntityStateVerbose.objects(commit_id=commit_verbose.id):
-                ces_verbose[cur_ces_verbose.long_name] = cur_ces_verbose
+                ces_verbose[cur_ces_verbose.long_name+str(cur_ces_verbose.file_id)] = cur_ces_verbose
                 ces_verbose_by_id[cur_ces_verbose.id] = cur_ces_verbose
 
         # fetch same commit in condensed DB
@@ -105,7 +105,7 @@ def start():
         with switch_db(CodeEntityState, 'default') as CodeEntityStateCondensed:
             for ces_id in commit_condensed.code_entity_states:
                 cur_ces_condensed = CodeEntityStateCondensed.objects(id=ces_id).get()
-                ces_condensed[cur_ces_condensed.long_name] = cur_ces_condensed
+                ces_condensed[cur_ces_condensed.long_name+str(cur_ces_condensed.file_id)] = cur_ces_condensed
                 ces_condensed_by_id[cur_ces_condensed.id] = cur_ces_condensed
 
 
