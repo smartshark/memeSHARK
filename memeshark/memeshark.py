@@ -1,12 +1,12 @@
-import logging
-import timeit
-import sys
 import copy
+import logging
+import sys
+import timeit
 
 import networkx as nx
 from mongoengine import connect, DoesNotExist
-from dictdiffer import diff
-from pycoshark.mongomodels import Project, VCSSystem, Commit, CodeEntityState, CodeGroupState
+
+from pycoshark.mongomodels import Project, VCSSystem, Commit, CodeEntityState
 from pycoshark.utils import create_mongodb_uri_string
 
 logger = logging.getLogger("main")
@@ -65,11 +65,12 @@ class MemeSHARK(object):
 
     def _merge_path(self, commit_graph, node):
         self.progress_counter += 1
-        logger.info("start merging for path starting with node %s (%i / %i)", node, self.progress_counter, self.no_commits)
+        logger.info("start merging for path starting with node %s (%i / %i)", node, self.progress_counter,
+                    self.no_commits)
 
         ces_current_state = {}
         for ces in CodeEntityState.objects(commit_id=node):
-            ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
+            ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
 
         self._add_ces_to_commit(node, ces_current_state)
 
@@ -78,41 +79,41 @@ class MemeSHARK(object):
         for i, succnode in enumerate(successor):
             self._merge_node(commit_graph, succnode, ces_current_state)
 
-
     def _merge_node(self, commit_graph, node, ces_past_state):
         if len(commit_graph.pred[node]) != 1:
             logger.info("node %s does not have exactly one parent. end of path.", node)
         else:
             self.progress_counter += 1
             logger.info("merging for node %s (%i / %i)", node, self.progress_counter, self.no_commits)
-            ces_current_state = {} # contains CES that will be added to commit
-            ces_map = {}           # for updating self-references
-            ces_unchanged = []     # stores CES to be deleted
+            ces_current_state = {}  # contains CES that will be added to commit
+            ces_map = {}  # for updating self-references
+            ces_unchanged = []  # stores CES to be deleted
 
             for ces in CodeEntityState.objects(commit_id=node):
-                if ces.long_name+ces.file_id.__str__() not in ces_past_state:
-                    ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
+                if ces.long_name + ces.file_id.__str__() not in ces_past_state:
+                    ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                     ces_map[ces.id] = ces.id
                 else:
-                    ces_past = ces_past_state[ces.long_name+ces.file_id.__str__()]
-                    old, new = self._compare_djangoobjects(ces_past, ces, {'id','s_key','commit_id','ce_parent_id','cg_ids'})
-                    if len(new.keys())>0 or len(old.keys())>0:
-                        ces_current_state[ces.long_name+ces.file_id.__str__()] = ces
+                    ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
+                    old, new = self._compare_djangoobjects(ces_past, ces,
+                                                           {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
+                    if len(new.keys()) > 0 or len(old.keys()) > 0:
+                        ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                         ces_map[ces.id] = ces.id
                     else:
-                        ces_current_state[ces.long_name+ces.file_id.__str__()] = ces_past
+                        ces_current_state[ces.long_name + ces.file_id.__str__()] = ces_past
                         ces_map[ces.id] = ces_past.id
                         ces_unchanged.append(ces.id)
 
             updated_current_state = True
             while updated_current_state:
                 updated_current_state = False
-                for i,ces in ces_current_state.items():
+                for i, ces in ces_current_state.items():
                     if ces.ce_parent_id in ces_unchanged:
                         # do not delete currently referenced parents
                         ces_unchanged.remove(ces.ce_parent_id)
                         ces_parent = CodeEntityState.objects(id=ces.ce_parent_id).get()
-                        ces_current_state[ces_parent.long_name+ces_parent.file_id.__str__()] = ces_parent
+                        ces_current_state[ces_parent.long_name + ces_parent.file_id.__str__()] = ces_parent
                         updated_current_state = True
                         break
 
@@ -123,7 +124,7 @@ class MemeSHARK(object):
             # recursively call for successors
             for i, succnode in enumerate(commit_graph.succ[node]):
                 ces_state_argument = ces_current_state
-                if len(commit_graph.succ[node])>1:
+                if len(commit_graph.succ[node]) > 1:
                     ces_state_argument = copy.deepcopy(ces_current_state)
                 self._merge_node(commit_graph, succnode, ces_state_argument)
 
@@ -137,8 +138,8 @@ class MemeSHARK(object):
 
     def _update_ces(self, node, ces_current_state, ces_unchanged, ces_map):
         for i, ces in ces_current_state.items():
-            if ces.commit_id!=node:
-                continue # skip CES from previous commits
+            if ces.commit_id != node:
+                continue  # skip CES from previous commits
 
             # updated CES references
             if ces.ce_parent_id in ces_unchanged:
