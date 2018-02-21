@@ -66,27 +66,19 @@ class MemeSHARK(object):
     def _merge_path(self, commit_graph, node):
         self.progress_counter += 1
         logger.info("start merging for path starting with node %s (%i / %i)", node, self.progress_counter, self.no_commits)
-        # merges commits that are successors of this node
 
         ces_current_state = {}
         for ces in CodeEntityState.objects(commit_id=node):
             ces_current_state[ces.long_name] = ces
 
-        #cg_current_state = {}
-        #for cg in CodeGroupState.objects(commit_id=node):
-        #    cg_current_state[cg.long_name] = cg
-
         self._add_ces_to_commit(node, ces_current_state)
-        #self._add_cg_to_commit(node, cg_current_state)
 
         successor = commit_graph.succ[node];
 
         for i, succnode in enumerate(successor):
-            #self._merge_node(commit_graph,succnode, ces_current_state, cg_current_state)
             self._merge_node(commit_graph, succnode, ces_current_state)
 
 
-    #def _merge_node(self, commit_graph, node, ces_past_state, cg_past_state):
     def _merge_node(self, commit_graph, node, ces_past_state):
         if len(commit_graph.pred[node]) != 1:
             logger.info("node %s does not have exactly one parent. end of path.", node)
@@ -96,10 +88,6 @@ class MemeSHARK(object):
             ces_current_state = {} # contains CES that will be added to commit
             ces_map = {}           # for updating self-references
             ces_unchanged = []     # stores CES to be deleted
-
-            #cg_current_state = {}  # contains CGs that will be added to commit
-            #cg_map = {}            # for updating self-references
-            #cg_unchanged = []      # stores cgs that will be deleted
 
             for ces in CodeEntityState.objects(commit_id=node):
                 if ces.long_name not in ces_past_state:
@@ -128,35 +116,12 @@ class MemeSHARK(object):
                         updated_current_state = True
                         break
 
-            # for cg in CodeGroupState.objects(commit_id=node):
-            #     if cg.long_name not in cg_past_state:
-            #         logger.info("new cg %s %s", cg.long_name, cg.id)
-            #         cg_current_state[cg.long_name] = cg
-            #         cg_map[cg.id] = cg.id
-            #     else:
-            #         cg_past = cg_past_state[cg.long_name]
-            #         old, new = self._compare_djangoobjects(cg_past, cg, {'id', 's_key', 'commit_id', 'cg_parent_ids'})
-            #         if len(new.keys())>0 or len(old.keys())>0:
-            #             logger.info("keeping current cg: %s", cg.id)
-            #             cg_current_state[cg.long_name] = cg
-            #             cg_map[cg.id] = cg.id
-            #         else:
-            #             logger.info("replacing cg %s with past cg %s", cg.id, cg_past.id)
-            #             cg_current_state[cg.long_name] = cg_past
-            #             cg_map[cg.id] = cg_past.id
-            #             cg_unchanged.append(cg.id)
-
             self._add_ces_to_commit(node, ces_current_state)
-            #self._add_cg_to_commit(node, cg_current_state)
-            #self._update_ces(node, ces_current_state, ces_unchanged, ces_map, cg_unchanged, cg_map)
             self._update_ces(node, ces_current_state, ces_unchanged, ces_map)
-            #self._update_cg(node, cg_current_state, cg_unchanged, cg_map)
             self._delete_unchanged_ces(ces_unchanged, len(ces_current_state))
-            #self._delete_unchanged_cg(cg_unchanged, len(cg_current_state))
 
             # recursively call for successors
             for i, succnode in enumerate(commit_graph.succ[node]):
-                #self._merge_node(commit_graph, succnode, ces_current_state, cg_current_state)
                 ces_state_argument = ces_current_state
                 if len(commit_graph.succ[node])>1:
                     ces_state_argument = copy.deepcopy(ces_current_state)
@@ -170,15 +135,6 @@ class MemeSHARK(object):
         commit.code_entity_states = ids
         commit.save()
 
-    # def _add_cg_to_commit(self, node, current_state):
-    #     commit = Commit.objects(id=node).get()
-    #     ids = []
-    #     for i, cg in current_state.items():
-    #         ids.append(cg.id)
-    #     commit.code_group_states = ids
-    #     commit.save()
-
-    #def _update_ces(self, node, ces_current_state, ces_unchanged, ces_map, cg_unchanged, cg_map):
     def _update_ces(self, node, ces_current_state, ces_unchanged, ces_map):
         for i, ces in ces_current_state.items():
             if ces.commit_id!=node:
@@ -200,35 +156,12 @@ class MemeSHARK(object):
             if had_changes:
                 ces.save()
 
-    # def _update_cg(self, node, cg_current_state, cg_unchanged, cg_map):
-    #     for i, cg in cg_current_state.items():
-    #         if cg.commit_id!=node:
-    #             continue # skip CG from previous commits
-    #         had_changes = False
-    #
-    #         cur_parent_ids = cg.cg_parent_ids
-    #         for j, cg_parent in enumerate(cur_parent_ids):
-    #             if cg_parent in cg_unchanged:
-    #                 cur_parent_ids[j] = cg_map[cur_parent_ids]
-    #                 had_changes = True
-    #         cg.cg_parent_ids = cur_parent_ids
-    #
-    #         if had_changes:
-    #             cg.save()
-
     def _delete_unchanged_ces(self, ces_unchanged, no_ces):
         logger.info("deleting %i of %i code entity states", len(ces_unchanged), no_ces)
         self.ces_total += no_ces
         self.ces_deleted_total += len(ces_unchanged)
         for cesid in ces_unchanged:
             CodeEntityState.objects(id=cesid).delete()
-
-    # def _delete_unchanged_cg(self, cg_unchanged, no_cg):
-    #     logger.info("deleting %i of %i code group states", len(cg_unchanged), no_cg)
-    #     self.cg_total += no_cg
-    #     self.cg_deleted_total += len(cg_unchanged)
-    #     for cgid in cg_unchanged:
-    #         CodeGroupState.objects(id=cgid).delete()
 
     def _compare_djangoobjects(self, obj1, obj2, excluded_keys):
         keys = obj1._fields_ordered
@@ -240,14 +173,8 @@ class MemeSHARK(object):
                 value1 = getattr(obj1, key)
                 value2 = getattr(obj2, key)
                 if value1 != value2:
-                    #if isinstance(value1, dict) and isinstance(value2, dict):
-                    #    result = list(diff(value1, value2))
-                    #    if len(result) > 0:
                     old.update({key: getattr(obj1, key)})
                     new.update({key: getattr(obj2, key)})
-                    #else:
-                    #    old.update({key: getattr(obj1, key)})
-                    #    new.update({key: getattr(obj2, key)})
             except KeyError:
                 old.update({key: getattr(obj1, key)})
 
