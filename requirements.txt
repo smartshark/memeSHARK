@@ -1,0 +1,5 @@
+mongoengine
+pymongo
+networkx
+dictdiffer
+git+https://github.com/smartshark/pycoSHARK.git@1.0.11#egg=pycoshark-1.0.11

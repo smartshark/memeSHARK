@@ -1,0 +1,83 @@
+{
+    "name": "memeSHARK",
+    "author": "Steffen Herbold",
+    "version": "0.1.0",
+    "plugin_type": "other",
+    "linux_libraries": [
+    ],
+    "created_collections": [],
+    "description": "Plugin to remove code entities and code groups that did not change in a revision.",
+    "requires": [],
+    "arguments": [
+        {
+            "name": "plugin_path",
+            "required": true,
+            "position": 1,
+            "type": "install",
+            "description": "path to root folder of plugin"
+        },
+        {
+            "name": "plugin_path",
+            "required": true,
+            "position": 1,
+            "type": "execute",
+            "description": "path to root folder of plugin"
+        },
+        {
+            "name": "db_user",
+            "required": false,
+            "position": 2,
+            "type": "execute",
+            "description": "database user for the mongodb"
+        },
+        {
+            "name": "db_password",
+            "required": false,
+            "position": 3,
+            "type": "execute",
+            "description": "password for the user of the mongodb"
+        },
+        {
+            "name": "db_database",
+            "required": true,
+            "position": 4,
+            "type": "execute",
+            "description": "name of the database in the mongodb"
+        },
+        {
+            "name": "db_hostname",
+            "required": true,
+            "position": 5,
+            "type": "execute",
+            "description": "hostname of the server, where the mongodb runs on"
+        },
+        {
+            "name": "db_port",
+            "required": true,
+            "position": 6,
+            "type": "execute",
+            "description": "port on which the mongodb is listening on"
+        },
+        {
+            "name": "db_authentication",
+            "required": false,
+            "position": 7,
+            "type": "execute",
+            "description": "databse against which users are authenticated"
+        },
+        {
+            "name": "debug",
+            "required": false,
+            "position": 8,
+            "type": "execute",
+            "description": "debug level (DEBUG, INFO, ERROR, WARNING)"
+        },
+        {
+            "name": "ssl_enabled",
+            "required": false,
+            "position": 9,
+            "type": "execute",
+            "description": "needs to be set if database uses ssl connection"
+        }
+    ]
+}

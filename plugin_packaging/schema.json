@@ -1,0 +1,25 @@
+{
+"collections":[
+      {
+         "collection_name":"commit"
+         "fields":[
+            {
+               "type":"ArrayType",
+               "sub_type": "ObjectIdType",
+               "logical_type":"RID",
+               "field_name":"code_enitity_states",
+               "reference_to": "code_entity_state",
+               "desc": "List of code entity states that are current for this commit."
+            },
+            {
+               "type":"ArrayType",
+               "sub_type": "ObjectIdType",
+               "logical_type":"RID",
+               "field_name":"code_group_states",
+               "reference_to": "code_group_state",
+               "desc": "List of code group states that are current for this commit."
+            }
+         ]
+      }
+   ]
+}
