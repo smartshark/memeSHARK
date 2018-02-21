@@ -3,11 +3,7 @@ import logging
 import logging.config
 import os
 import argparse
-import sys
 
-from pycoshark.utils import get_base_argparser
-
-from memeshark.config import Config
 from mongoengine import connect, DoesNotExist
 from mongoengine.context_managers import switch_db
 from dictdiffer import diff
@@ -98,14 +94,6 @@ def start():
                 ces_verbose[cur_ces_verbose.long_name] = cur_ces_verbose
                 ces_verbose_by_id[cur_ces_verbose.id] = cur_ces_verbose
 
-        # fetch verbose CGs
-        #cg_verbose = {}
-        #cg_verbose_by_id = {}
-        #with switch_db(CodeGroupState, 'db-verbose') as CodeGroupStateVerbose:
-        #    for cur_cg_verbose in CodeGroupStateVerbose.objects(commit_id=commit_verbose.id):
-        #        cg_verbose[cur_cg_verbose.long_name] = cur_cg_verbose
-        #        cg_verbose_by_id[cur_cg_verbose.id] = cur_cg_verbose
-
         # fetch same commit in condensed DB
         commit_condensed = None
         with switch_db(Commit, 'default') as CommitCondensed:
@@ -120,18 +108,9 @@ def start():
                 ces_condensed[cur_ces_condensed.long_name] = cur_ces_condensed
                 ces_condensed_by_id[cur_ces_condensed.id] = cur_ces_condensed
 
-        #cg_condensed = {}
-        #cg_condensed_by_id = {}
-        #with switch_db(CodeGroupState, 'default') as CodeGroupStateCondensed:
-        #    for cg_id in commit_condensed.code_group_states:
-        #        cur_cg_condensed = CodeGroupStateCondensed.objects(id=cg_id).get()
-        #        cg_condensed[cur_cg_condensed.long_name] = cur_cg_condensed
-        #        cg_condensed_by_id[cur_cg_condensed.id] = cur_cg_condensed
 
         logger.info("num CES verbose  : %i", len(ces_verbose.keys()))
         logger.info("num CES condensed: %i", len(ces_condensed.keys()))
-        #logger.info("num CG verbose  : %i", len(cg_verbose.keys()))
-        #logger.info("num CG condensed: %i", len(cg_condensed.keys()))
 
         ces_unequal = 0
         # compare CES
@@ -162,42 +141,7 @@ def start():
                 ces_unequal += 1
                 continue
 
-            # TODO: check if referenced CGs are equal
-            #for i, cg_verbose_id in enumerate(cur_ces_verbose.cg_ids):
-            #    cg_ref_verbose = cg_verbose_by_id[cg_verbose_id]
-            #    if cur_ces_condensed.cg_ids[i] not in cg_condensed_by_id:
-            #        logger.error("broken CG reference (%s) for CES with id %s", cur_ces_condensed.cg_ids[i], cur_ces_condensed.id)
-            #        ces_unequal += 1
-            #        break
-            #    cg_ref_condensed = cg_condensed_by_id[cur_ces_condensed.cg_ids[i]]
-            #    old, new = compare_djangoobjects(cg_ref_verbose, cg_ref_condensed,
-            #                                     {'id', 's_key', 'commit_id', 'cg_parent_ids'})
-            #    if len(new.keys()) > 0 or len(old.keys()) > 0:
-            #        logger.error("referenced CGs for CES with long_name %s not equal!", long_name_verbose)
-            #        logger.error("verbose  : %s", old)
-            #        logger.error("condensed: %s", new)
-            #        ces_unequal += 1
-            #        break
-
-
-        #cg_unequal = 0
-        #for long_name_verbose, cur_cg_verbose in cg_verbose.items():
-        #    if long_name_verbose not in cg_verbose:
-        #        logger.error("CG with long_name %s not in condensed DB!", long_name_verbose)
-        #        cg_unequal += 1
-        #    else:
-        #        old, new = compare_djangoobjects(cur_cg_verbose, cg_condensed[long_name_verbose],
-        #                                         {'id', 's_key', 'commit_id', 'cg_parent_ids'})
-        #        if len(new.keys()) > 0 or len(old.keys()) > 0:
-        #           logger.error("CG with long_name %s not equal!", long_name_verbose)
-        #           logger.error("verbose  : %s", old)
-        #           logger.error("condensed: %s", new)
-        #           cg_unequal += 1
-        #       else:
-        #          pass  # match!
-
         logger.info("num CES from verbose not matched: %i", ces_unequal)
-        #logger.info("num CG  from verbose not matched: %i", cg_unequal)
 
 def compare_djangoobjects(obj1, obj2, excluded_keys):
     keys = obj1._fields_ordered
