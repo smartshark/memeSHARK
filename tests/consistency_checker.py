@@ -12,7 +12,7 @@ from pycoshark.mongomodels import Commit, CodeEntityState
 from pycoshark.utils import create_mongodb_uri_string
 
 
-def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/loggerConfiguration.json",
+def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/../loggerConfiguration.json",
                   default_level=logging.INFO):
     """
     Setup logging configuration
