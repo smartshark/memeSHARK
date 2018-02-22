@@ -21,13 +21,18 @@ class MemeSHARK(object):
     no_commits = 0
     ces_total = 0
     ces_deleted_total = 0
-    cg_total = 0
-    cg_deleted_total = 0
 
     def __init__(self):
+        """
+        Default constructor.
+        """
         pass
 
     def start(self, cfg):
+        """
+        Executes the memeSHARK.
+        :param cfg: configuration object that is used
+        """
         logger.setLevel(cfg.get_debug_level())
         start_time = timeit.default_timer()
 
@@ -36,7 +41,7 @@ class MemeSHARK(object):
                                         cfg.ssl_enabled)
         connect(cfg.database, host=uri)
 
-        # Get the project for which issue data is collected
+        # Get the id of the project for which the code entities shall be merged
         try:
             project_id = Project.objects(name=cfg.project_name).get().id
         except DoesNotExist:
@@ -59,11 +64,16 @@ class MemeSHARK(object):
                 self._merge_path(commit_graph, node)
 
         logger.info("deleted %i of %i code entity states", self.ces_deleted_total, self.ces_total)
-        logger.info("deleted %i of %i code group states", self.cg_deleted_total, self.cg_total)
         elapsed = timeit.default_timer() - start_time
         logger.info("Execution time: %0.5f s" % elapsed)
 
     def _merge_path(self, commit_graph, node):
+        """
+        Starts the merging of code entity states for a path in the commit graph.
+        In the sense of the memeSHARK, a path starts with a commit that does not have exactly one parent and ends if a commit either has no successor or also not exactly one parent.
+        :param commit_graph: the commit graph
+        :param node: the node in the commit graph where the path starts
+        """
         self.progress_counter += 1
         logger.info("start merging for path starting with node %s (%i / %i)", node, self.progress_counter,
                     self.no_commits)
@@ -80,6 +90,12 @@ class MemeSHARK(object):
             self._merge_node(commit_graph, succnode, ces_current_state)
 
     def _merge_node(self, commit_graph, node, ces_past_state):
+        """
+        Merges code entity states for the current node in the commit graph.
+        :param commit_graph: the commit graph
+        :param node: the current node
+        :param ces_past_state: the code entity states
+        """
         if len(commit_graph.pred[node]) != 1:
             logger.info("node %s does not have exactly one parent. end of path.", node)
         else:
@@ -129,6 +145,11 @@ class MemeSHARK(object):
                 self._merge_node(commit_graph, succnode, ces_state_argument)
 
     def _add_ces_to_commit(self, node, current_state):
+        """
+        Adds a list of current code entity state IDs to a commit
+        :param node: the commit
+        :param current_state: the code entity stats
+        """
         commit = Commit.objects(id=node).get()
         ids = []
         for i, ces in current_state.items():
@@ -137,6 +158,13 @@ class MemeSHARK(object):
         commit.save()
 
     def _update_ces(self, node, ces_current_state, ces_unchanged, ces_map):
+        """
+        Updates the code entity states that are not deleted. This is required because the parents may change.
+        :param node: the commit
+        :param ces_current_state: the current code entity states
+        :param ces_unchanged: the code entity states that did not change in a commit and are, therefore, deleted
+        :param ces_map: a mapping of the IDs of code entity states in this commits to their representation that is kept
+        """
         for i, ces in ces_current_state.items():
             if ces.commit_id != node:
                 continue  # skip CES from previous commits
@@ -147,13 +175,25 @@ class MemeSHARK(object):
                 ces.save()
 
     def _delete_unchanged_ces(self, ces_unchanged, no_ces):
+        """
+        Deletes the code entity states that did not change in the current commit.
+        :param ces_unchanged: the IDs of the unchanged code entity states.
+        :param no_ces: the total number of code entity states for this commit
+        """
         logger.info("deleting %i of %i code entity states", len(ces_unchanged), no_ces)
         self.ces_total += no_ces
         self.ces_deleted_total += len(ces_unchanged)
         for cesid in ces_unchanged:
             CodeEntityState.objects(id=cesid).delete()
 
-    def _compare_djangoobjects(self, obj1, obj2, excluded_keys):
+    def _compare_dicts(self, obj1, obj2, excluded_keys):
+        """
+        Compares to dicts to each other, and returns the differences.
+        :param obj1: first dict
+        :param obj2: second dict
+        :param excluded_keys: keys that are ignored
+        :return: two dicts: old for the state in the obj1, new for the state in obj2 in case of differences
+        """
         keys = obj1._fields_ordered
         old, new = {}, {}
         for key in keys:
@@ -171,6 +211,11 @@ class MemeSHARK(object):
         return old, new
 
     def _generate_graph(self, vcs_id):
+        """
+        Generates the commit graph for a VCS system.
+        :param vcs_id: ID of the VCS system
+        :return: the commit graph
+        """
         g = nx.DiGraph()
         # first we add all nodes to the graph
         for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):

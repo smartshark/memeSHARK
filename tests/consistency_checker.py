@@ -147,7 +147,14 @@ def start():
         logger.info("num CES from verbose not matched: %i", ces_unequal)
 
 
-def compare_djangoobjects(obj1, obj2, excluded_keys):
+def compare_dicts(obj1, obj2, excluded_keys):
+    """
+    Compares to dicts to each other, and returns the differences.
+    :param obj1: first dict
+    :param obj2: second dict
+    :param excluded_keys: keys that are ignored
+    :return: two dicts: old for the state in the obj1, new for the state in obj2 in case of differences
+    """
     keys = obj1._fields_ordered
     old, new = {}, {}
     for key in keys:
