@@ -122,7 +122,7 @@ def start():
                 continue
 
             cur_ces_condensed = ces_condensed[long_name_verbose]
-            old, new = compare_djangoobjects(cur_ces_verbose, cur_ces_condensed,
+            old, new = compare_dicts(cur_ces_verbose, cur_ces_condensed,
                                              {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
             if len(new.keys()) > 0 or len(old.keys()) > 0:
                 logger.error("CES with long_name %s (id verbose: %s /id condensed %s) not equal!", long_name_verbose,
@@ -135,7 +135,8 @@ def start():
             # check if CES parent is equal
             ces_parent_verbose = ces_verbose_by_id[cur_ces_verbose.id]
             ces_parent_condensed = ces_condensed_by_id[cur_ces_condensed.id]
-            old, new = compare_djangoobjects(ces_parent_verbose, ces_parent_condensed,
+            old, new = compare_dicts\
+                (ces_parent_verbose, ces_parent_condensed,
                                              {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
             if len(new.keys()) > 0 or len(old.keys()) > 0:
                 logger.error("ce_parent of CES with long_name %s not equal!", long_name_verbose)

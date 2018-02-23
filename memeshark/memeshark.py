@@ -112,7 +112,7 @@ class MemeSHARK(object):
                     ces_map[ces.id] = ces.id
                 else:
                     ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
-                    old, new = self._compare_djangoobjects(ces_past, ces,
+                    old, new = self._compare_dicts(ces_past, ces,
                                                            {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
                     if len(new.keys()) > 0 or len(old.keys()) > 0:
                         ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
@@ -121,18 +121,6 @@ class MemeSHARK(object):
                         ces_current_state[ces.long_name + ces.file_id.__str__()] = ces_past
                         ces_map[ces.id] = ces_past.id
                         ces_unchanged.append(ces.id)
-
-            updated_current_state = True
-            while updated_current_state:
-                updated_current_state = False
-                for i, ces in ces_current_state.items():
-                    if ces.ce_parent_id in ces_unchanged:
-                        # do not delete currently referenced parents
-                        ces_unchanged.remove(ces.ce_parent_id)
-                        ces_parent = CodeEntityState.objects(id=ces.ce_parent_id).get()
-                        ces_current_state[ces_parent.long_name + ces_parent.file_id.__str__()] = ces_parent
-                        updated_current_state = True
-                        break
 
             self._add_ces_to_commit(node, ces_current_state)
             self._update_ces(node, ces_current_state, ces_unchanged, ces_map)
