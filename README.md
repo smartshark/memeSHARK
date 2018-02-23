@@ -1,10 +1,6 @@
 # memeSHARK
 [![Build Status](https://travis-ci.org/smartshark/memeSHARK.svg?branch=master)](https://travis-ci.org/smartshark/memeSHARK)
 
-## Documentation
-
-TODO
-
 ## Introduction
 
 This introduction will show how to use the memeSHARK. Furthermore, we list all requirements for this tool here, so that an easy installation is possible. 
