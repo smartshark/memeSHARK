@@ -70,7 +70,8 @@ class MemeSHARK(object):
     def _merge_path(self, commit_graph, node):
         """
         Starts the merging of code entity states for a path in the commit graph.
-        In the sense of the memeSHARK, a path starts with a commit that does not have exactly one parent and ends if a commit either has no successor or also not exactly one parent.
+        In the sense of the memeSHARK, a path starts with a commit that does not have exactly one parent and ends if a
+        commit either has no successor or also not exactly one parent.
         :param commit_graph: the commit graph
         :param node: the node in the commit graph where the path starts
         """
