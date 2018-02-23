@@ -1,7 +1,7 @@
 {
     "name": "memeSHARK",
     "author": "Steffen Herbold",
-    "version": "1.0.0",
+    "version": "1.00",
     "plugin_type": "other",
     "linux_libraries": [
     ],
