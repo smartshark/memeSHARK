@@ -1,13 +1,19 @@
 {
     "name": "memeSHARK",
     "author": "Steffen Herbold",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "plugin_type": "other",
     "linux_libraries": [
     ],
     "created_collections": [],
     "description": "Plugin to remove code entities and code groups that did not change in a revision.",
-    "requires": [],
+    "requires": [
+        {
+            "name": "vcsSHARK",
+            "operator": ">=",
+            "version": "0.11"
+        }
+    ],
     "arguments": [
         {
             "name": "plugin_path",
