@@ -10,13 +10,13 @@ if not sys.version_info[0] == 3:
 
 setup(
     name='memeSHARK',
-    version='0.0.1',
+    version='1.0.0',
     author='Steffen Herbold',
     author_email='herbold@cs.uni-goettingen.de',
     description='Condense code entities to remove duplicates',
     setup_requires=['numpy', 'pytz'],
-    install_requires=['mongoengine', 'pymongo', 'pycoshark>=1.0.11'],
-    dependency_links=['git+https://github.com/smartshark/pycoSHARK.git@1.0.11#egg=pycoshark-1.0.11'],
+    install_requires=['mongoengine', 'pymongo', 'pycoshark>=1.0.20'],
+    dependency_links=['git+https://github.com/smartshark/pycoSHARK.git@1.0.20#egg=pycoshark-1.0.20'],
     url='https://github.com/smartshark/memeSHARK',
     download_url='https://github.com/smartshark/memeSHARK/zipball/master',
     packages=find_packages(),
