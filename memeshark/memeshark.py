@@ -97,41 +97,53 @@ class MemeSHARK(object):
         :param node: the current node
         :param ces_past_state: the code entity states
         """
-        if len(commit_graph.pred[node]) != 1:
-            logger.info("node %s does not have exactly one parent. end of path.", node)
-        else:
+        while len(commit_graph.pred[node]) == 1:
             self.progress_counter += 1
             logger.info("merging for node %s (%i / %i)", node, self.progress_counter, self.no_commits)
             ces_current_state = {}  # contains CES that will be added to commit
             ces_map = {}  # for updating self-references
             ces_unchanged = []  # stores CES to be deleted
 
-            for ces in CodeEntityState.objects(commit_id=node):
-                if ces.long_name + ces.file_id.__str__() not in ces_past_state:
+            # check if CES are already appended to commit, if yes fetch current state from commit and skip merging
+            current_commit = Commit.objects(id=node).get()
+            if len(current_commit.code_entity_states) > 0:
+                logger.info("node %s already processed", node)
+                for i, ces in enumerate(CodeEntityState.objects(id__in=current_commit.code_entity_states)):
                     ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
-                    ces_map[ces.id] = ces.id
-                else:
-                    ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
-                    old, new = self._compare_dicts(ces_past, ces,
-                                                           {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
-                    if len(new.keys()) > 0 or len(old.keys()) > 0:
+            else:
+                for ces in CodeEntityState.objects(commit_id=node):
+                    if ces.long_name + ces.file_id.__str__() not in ces_past_state:
                         ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                         ces_map[ces.id] = ces.id
                     else:
-                        ces_current_state[ces.long_name + ces.file_id.__str__()] = ces_past
-                        ces_map[ces.id] = ces_past.id
-                        ces_unchanged.append(ces.id)
+                        ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
+                        old, new = self._compare_dicts(ces_past, ces,
+                                                       {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
+                        if len(new.keys()) > 0 or len(old.keys()) > 0:
+                            ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
+                            ces_map[ces.id] = ces.id
+                        else:
+                            ces_current_state[ces.long_name + ces.file_id.__str__()] = ces_past
+                            ces_map[ces.id] = ces_past.id
+                            ces_unchanged.append(ces.id)
 
-            self._add_ces_to_commit(node, ces_current_state)
-            self._update_ces(node, ces_current_state, ces_unchanged, ces_map)
-            self._delete_unchanged_ces(ces_unchanged, len(ces_current_state))
+                self._add_ces_to_commit(node, ces_current_state)
+                self._update_ces(node, ces_current_state, ces_unchanged, ces_map)
+                self._delete_unchanged_ces(ces_unchanged, len(ces_current_state))
 
+            # in case there is only on successor use iterative approach
+            if len(commit_graph.succ[node]) == 1:
+                ces_past_state = ces_current_state
+                for i, succnode in enumerate(commit_graph.succ[node]):
+                    node = succnode
             # recursively call for successors
-            for i, succnode in enumerate(commit_graph.succ[node]):
-                ces_state_argument = ces_current_state
-                if len(commit_graph.succ[node]) > 1:
+            else:
+                for i, succnode in enumerate(commit_graph.succ[node]):
                     ces_state_argument = copy.deepcopy(ces_current_state)
-                self._merge_node(commit_graph, succnode, ces_state_argument)
+                    self._merge_node(commit_graph, succnode, ces_state_argument)
+                return
+
+        logger.info("node %s does not have exactly one parent. end of path.", node)
 
     def _add_ces_to_commit(self, node, current_state):
         """
