@@ -1,15 +1,16 @@
-import copy
 import logging
+import multiprocessing
 import sys
+import time
 import timeit
+from multiprocessing import Queue
 
 import networkx as nx
-from mongoengine import connect, DoesNotExist
-
+from mongoengine import connect, DoesNotExist, connection
 from pycoshark.mongomodels import Project, VCSSystem, Commit, CodeEntityState
 from pycoshark.utils import create_mongodb_uri_string
 
-logger = logging.getLogger("main")
+from memeshark.config import setup_logging
 
 
 class MemeSHARK(object):
@@ -26,6 +27,7 @@ class MemeSHARK(object):
         """
         Default constructor.
         """
+        self.logger = logging.getLogger("main")
         pass
 
     def start(self, cfg):
@@ -33,73 +35,194 @@ class MemeSHARK(object):
         Executes the memeSHARK.
         :param cfg: configuration object that is used
         """
-        logger.setLevel(cfg.get_debug_level())
+        self.logger.setLevel(cfg.get_debug_level())
         start_time = timeit.default_timer()
 
         # Connect to mongodb
         uri = create_mongodb_uri_string(cfg.user, cfg.password, cfg.host, cfg.port, cfg.authentication_db,
                                         cfg.ssl_enabled)
-        connect(cfg.database, host=uri)
+        db_client = connect(cfg.database, host=uri, alias='default')
 
         # Get the id of the project for which the code entities shall be merged
         try:
             project_id = Project.objects(name=cfg.project_name).get().id
         except DoesNotExist:
-            logger.error('Project %s not found!' % cfg.project_name)
+            self.logger.error('Project %s not found!' % cfg.project_name)
             sys.exit(1)
 
         # Get the VCS systems for the project
         vcs_systems = VCSSystem.objects(project_id=project_id).get().id
-        logger.info("vcs_system_id: %s", vcs_systems)
+        self.logger.info("vcs_system_id: %s", vcs_systems)
 
         # Get the commits for the project
-        self.no_commits = Commit.objects(vcs_system_id=vcs_systems).count()
+        no_commits = Commit.objects(vcs_system_id=vcs_systems).count()
 
         # Create commit graph
         commit_graph = self._generate_graph(vcs_systems)
 
+        # close connection to MongoDB - otherwise it will not work in the subprocesses
+        db_client.close()
+        connection._dbs = {}
+        connection._connections = {}
+        connection._connection_settings = {}
+
+        # setup workers
+        max_workers = cfg.processes
+        task_queue = multiprocessing.JoinableQueue()
+        started_tasks = multiprocessing.Queue()
+        deleted_ces_queue = multiprocessing.Queue()
+        total_ces_queue = multiprocessing.Queue()
+        workers = [MemeSHARKWorker(commit_graph, cfg.database, uri, i, task_queue, started_tasks, deleted_ces_queue,
+                                   total_ces_queue, no_commits) for i in range(0, max_workers)]
+
+        self.logger.info("starting workers")
+        for worker in workers:
+            worker.start()
+        time.sleep(5)  # brief wait for all processes to be ready
+
         # find nodes without predecessor or with multiple predecessors
         for i, node in enumerate(commit_graph):
             if len(commit_graph.pred[node]) != 1:
-                self._merge_path(commit_graph, node)
+                self.logger.info("adding task for start of path with commit id: %s", node)
+                task_queue.put(node)
 
-        logger.info("deleted %i of %i code entity states", self.ces_deleted_total, self.ces_total)
+        # wait task queue to be empty
+        task_queue.join()
+
+        self.logger.info("all tasks finished, terminating workers")
+        for worker in workers:
+            worker.terminate()
+
+        # collect statistics
+        ces_deleted_total = 0
+        while not deleted_ces_queue.empty():
+            ces_deleted_total += deleted_ces_queue.get()
+        ces_total = 0
+        while not total_ces_queue.empty():
+            ces_total += total_ces_queue.get()
+
+        self.logger.info("deleted %i of %i code entity states", ces_deleted_total, ces_total)
         elapsed = timeit.default_timer() - start_time
-        logger.info("Execution time: %0.5f s" % elapsed)
+        self.logger.info("Execution time: %0.5f s" % elapsed)
 
-    def _merge_path(self, commit_graph, node):
+    def _generate_graph(self, vcs_id):
+        """
+        Generates the commit graph for a VCS system.
+        :param vcs_id: ID of the VCS system
+        :return: the commit graph
+        """
+        g = nx.DiGraph()
+        # first we add all nodes to the graph
+        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
+            g.add_node(c.id)
+
+        # after that we draw all edges
+        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
+            for p in c.parents:
+                try:
+                    p1 = Commit.objects.get(vcs_system_id=vcs_id, revision_hash=p)
+                    g.add_edge(p1.id, c.id)
+                except Commit.DoesNotExist:
+                    self.logger.warning("parent of a commit is missing (commit id: %s - revision_hash: %s)", c.id, p)
+                    pass
+        return g
+
+
+class MemeSHARKWorker(multiprocessing.Process):
+    """
+    Setup of workers
+    :param commit_graph: the commit graph
+    :param database: name of the MongoDB
+    :param uri: URI of the MongoDB
+    :param number: number of the worker
+    :param task_queue: queue with tasks (i.e. starts of paths/branches)
+    :param started_tasks: queue that counts the processed commits
+    :param deleted_ces_queue: queue that counts the deleted CES for the project
+    :param total_ces_queue: queue that counts the total CES for the project
+    :param no_commits: number of commits of the project
+    """
+
+    def __init__(self, commit_graph, database, uri, number, task_queue, started_tasks, deleted_ces_queue,
+                 total_ces_queue, no_commits):
+        multiprocessing.Process.__init__(self)
+        self.commit_graph = commit_graph
+        self.database = database
+        self.uri = uri
+        self.alias = "worker%s" % number
+        self.task_queue = task_queue
+        self.no_commits = no_commits
+        self.started_tasks = started_tasks
+        self.deleted_ces_queue = deleted_ces_queue
+        self.total_ces_queue = total_ces_queue
+
+    def run(self):
+        """
+        Executes memeSHARK workers
+        """
+        setup_logging()
+        self.logger = logging.getLogger(self.alias)
+        connect(self.database, host=self.uri, alias='default')
+        self.logger.info("ready")
+        isIdle = False
+
+        while True:
+            if self.task_queue.empty():
+                if not isIdle:
+                    self.logger.info("queue empty - worker idle")
+                    isIdle = True
+                time.sleep(5)
+                continue
+            else:
+                if isIdle:
+                    self.logger.info("worker leaving idle state")
+                    isIdle = False
+                start_node = self.task_queue.get()
+
+            if len(self.commit_graph.pred[start_node]) != 1:
+                self.logger.info("start of path starting with node %s", start_node)
+                self._merge_path(start_node)
+            else:
+                # fetch past state for parent
+                self.logger.info("start merging for branch starting with node %s", start_node)
+                ces_past_state = {}
+                for pred in self.commit_graph.pred[start_node]:
+                    pred_commit = Commit.objects(id=pred).get()
+                    for i, ces in enumerate(CodeEntityState.objects(id__in=pred_commit.code_entity_states)):
+                        ces_past_state[ces.long_name + ces.file_id.__str__()] = ces
+                self._merge_node(start_node, ces_past_state)
+            self.task_queue.task_done()
+
+    def _merge_path(self, start_node):
         """
         Starts the merging of code entity states for a path in the commit graph.
         In the sense of the memeSHARK, a path starts with a commit that does not have exactly one parent and ends if a
         commit either has no successor or also not exactly one parent.
-        :param commit_graph: the commit graph
-        :param node: the node in the commit graph where the path starts
+        :param start_node: node at the beginning of a path
         """
-        self.progress_counter += 1
-        logger.info("start merging for path starting with node %s (%i / %i)", node, self.progress_counter,
-                    self.no_commits)
-
+        self.started_tasks.put(1)
+        current_progress = self.started_tasks.qsize()
+        self.logger.info("merging for node %s (%i / %i)", start_node, current_progress, self.no_commits)
         ces_current_state = {}
-        for ces in CodeEntityState.objects(commit_id=node):
+        for ces in CodeEntityState.objects(commit_id=start_node):
             ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
 
-        self._add_ces_to_commit(node, ces_current_state)
+        self._add_ces_to_commit(start_node, ces_current_state)
 
-        successor = commit_graph.succ[node];
+        successor = self.commit_graph.succ[start_node]
 
         for i, succnode in enumerate(successor):
-            self._merge_node(commit_graph, succnode, ces_current_state)
+            self._merge_node(succnode, ces_current_state)
 
-    def _merge_node(self, commit_graph, node, ces_past_state):
+    def _merge_node(self, node, ces_past_state):
         """
         Merges code entity states for the current node in the commit graph.
-        :param commit_graph: the commit graph
         :param node: the current node
         :param ces_past_state: the code entity states
         """
-        while len(commit_graph.pred[node]) == 1:
-            self.progress_counter += 1
-            logger.info("merging for node %s (%i / %i)", node, self.progress_counter, self.no_commits)
+        while len(self.commit_graph.pred[node]) == 1:
+            self.started_tasks.put(1)
+            current_progress = self.started_tasks.qsize()
+            self.logger.info("merging for node %s (%i / %i)", node, current_progress, self.no_commits)
             ces_current_state = {}  # contains CES that will be added to commit
             ces_map = {}  # for updating self-references
             ces_unchanged = []  # stores CES to be deleted
@@ -107,9 +230,17 @@ class MemeSHARK(object):
             # check if CES are already appended to commit, if yes fetch current state from commit and skip merging
             current_commit = Commit.objects(id=node).get()
             if len(current_commit.code_entity_states) > 0:
-                logger.info("node %s already processed", node)
-                for i, ces in enumerate(CodeEntityState.objects(id__in=current_commit.code_entity_states)):
-                    ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
+                self.logger.info("node %s already processed", node)
+                # check if follower is also already processed
+                is_processed = True
+                for i, succnode in enumerate(self.commit_graph.succ[node]):
+                    succ_commit = Commit.objects(id=succnode).get()
+                    if not len(succ_commit.code_entity_states) > 0:
+                        is_processed = False
+                # only fetch CES if follower is not processed
+                if not is_processed:
+                    for i, ces in enumerate(CodeEntityState.objects(id__in=current_commit.code_entity_states)):
+                        ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
             else:
                 for ces in CodeEntityState.objects(commit_id=node):
                     if ces.long_name + ces.file_id.__str__() not in ces_past_state:
@@ -132,18 +263,23 @@ class MemeSHARK(object):
                 self._delete_unchanged_ces(ces_unchanged, len(ces_current_state))
 
             # in case there is only on successor use iterative approach
-            if len(commit_graph.succ[node]) == 1:
+            if len(self.commit_graph.succ[node]) == 1:
                 ces_past_state = ces_current_state
-                for i, succnode in enumerate(commit_graph.succ[node]):
+                for i, succnode in enumerate(self.commit_graph.succ[node]):
                     node = succnode
-            # recursively call for successors
+            # add new job to queue for branches to enable parallelism for branches
             else:
-                for i, succnode in enumerate(commit_graph.succ[node]):
-                    ces_state_argument = copy.deepcopy(ces_current_state)
-                    self._merge_node(commit_graph, succnode, ces_state_argument)
+                for i, succnode in enumerate(self.commit_graph.succ[node]):
+                    num_pred = len(self.commit_graph.pred[succnode])
+                    if num_pred == 1:
+                        self.logger.info("Adding task for start of branch with commit id: %s", succnode)
+                        self.task_queue.put(succnode)
+                    else:
+                        self.logger.info("Skipping merging for start of branch, because of #parents!=1 (%i): %s",
+                                         num_pred, succnode)
                 return
 
-        logger.info("node %s does not have exactly one parent. end of path.", node)
+
 
     def _add_ces_to_commit(self, node, current_state):
         """
@@ -181,9 +317,9 @@ class MemeSHARK(object):
         :param ces_unchanged: the IDs of the unchanged code entity states.
         :param no_ces: the total number of code entity states for this commit
         """
-        logger.info("deleting %i of %i code entity states", len(ces_unchanged), no_ces)
-        self.ces_total += no_ces
-        self.ces_deleted_total += len(ces_unchanged)
+        self.logger.info("deleting %i of %i code entity states", len(ces_unchanged), no_ces)
+        self.total_ces_queue.put(no_ces)
+        self.deleted_ces_queue.put(len(ces_unchanged))
         for cesid in ces_unchanged:
             CodeEntityState.objects(id=cesid).delete()
 
@@ -210,25 +346,3 @@ class MemeSHARK(object):
                 old.update({key: getattr(obj1, key)})
 
         return old, new
-
-    def _generate_graph(self, vcs_id):
-        """
-        Generates the commit graph for a VCS system.
-        :param vcs_id: ID of the VCS system
-        :return: the commit graph
-        """
-        g = nx.DiGraph()
-        # first we add all nodes to the graph
-        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
-            g.add_node(c.id)
-
-        # after that we draw all edges
-        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
-            for p in c.parents:
-                try:
-                    p1 = Commit.objects.get(vcs_system_id=vcs_id, revision_hash=p)
-                    g.add_edge(p1.id, c.id)
-                except Commit.DoesNotExist:
-                    logger.warning("parent of a commit is missing (commit id: %s - revision_hash: %s)", c.id, p)
-                    pass
-        return g

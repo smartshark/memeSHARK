@@ -1,5 +1,24 @@
+import json
 import logging
+import logging.config
+import os
 
+
+def setup_logging(default_path=os.path.dirname(os.path.realpath(__file__)) + "/../loggerConfiguration.json",
+                  default_level=logging.INFO):
+    """
+    Setup logging configuration
+
+    :param default_path: path to the logger configuration
+    :param default_level: defines the default logging level if configuration file is not found(default:logging.INFO)
+    """
+    path = default_path
+    if os.path.exists(path):
+        with open(path, 'rt') as f:
+            config = json.load(f)
+        logging.config.dictConfig(config)
+    else:
+        logging.basicConfig(level=default_level)
 
 class ConfigValidationException(Exception):
     """
@@ -26,6 +45,7 @@ class Config(object):
         self.authentication_db = args.db_authentication
         self.debug = args.debug
         self.project_name = args.project_name
+        self.processes = int(args.processes)
         self.ssl_enabled = args.ssl
 
     def get_debug_level(self):
@@ -44,7 +64,7 @@ class Config(object):
 
     def __str__(self):
         return "Config: host: %s, port: %s, user: %s, " \
-               "password: %s, database: %s, authentication_db: %s, ssl: %s, project_name:%s, debug: %s" % \
+               "password: %s, database: %s, authentication_db: %s, ssl: %s, project_name:%s, processes: %sdebug: %s" % \
                (
                    self.host,
                    self.port,
@@ -54,7 +74,8 @@ class Config(object):
                    self.authentication_db,
                    self.ssl_enabled,
                    self.project_name,
-                   self.debug
+                   self.debug,
+                   self.processes
                )
 
 
