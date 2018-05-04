@@ -207,6 +207,8 @@ class MemeSHARKWorker(multiprocessing.Process):
             ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
 
         self._add_ces_to_commit(start_node, ces_current_state)
+        self.deleted_ces_queue.put(0)
+        self.total_ces_queue.put(len(ces_current_state))
 
         successor = self.commit_graph.succ[start_node]
 
