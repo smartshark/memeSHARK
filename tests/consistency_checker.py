@@ -3,12 +3,12 @@ import json
 import logging
 import logging.config
 import os
+import sys
 
 from dictdiffer import diff
-from mongoengine import connect
+from mongoengine import connect, DoesNotExist
 from mongoengine.context_managers import switch_db
-
-from pycoshark.mongomodels import Commit, CodeEntityState
+from pycoshark.mongomodels import Commit, CodeEntityState, Project, VCSSystem
 from pycoshark.utils import create_mongodb_uri_string
 
 
@@ -63,6 +63,7 @@ def start():
 
     parser.add_argument('--debug', help='Sets the debug level.', default='DEBUG',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+    parser.add_argument('-n', '--project-name', help='Name of the project to compress.', default=None)
 
     args = parser.parse_args()
 
@@ -83,11 +84,27 @@ def start():
     # fetch all verbose commmits
     commits_verbose = []
     with switch_db(Commit, 'db-verbose') as CommitVerbose:
-        for cur_commit_verbose in CommitVerbose.objects():
+        if args.project_name is None:
+            # no project specified, fetch all commits
+            commit_objects = CommitVerbose.objects()
+        else:
+            # fetch only commits for selected project
+            try:
+                project_id = Project.objects(name=args.project_name).get().id
+            except DoesNotExist:
+                logger.error('Project %s not found!' % args.project_name)
+                sys.exit(1)
+            vcs_systems = VCSSystem.objects(project_id=project_id).get().id
+            logger.info("vcs_system_id: %s", vcs_systems)
+            commit_objects = Commit.objects(vcs_system_id=vcs_systems)
+
+        # Update for only selecting single projects should be here
+        for cur_commit_verbose in commit_objects:
             commits_verbose.append(cur_commit_verbose)
-    logger.info("num commits verbose: %i", len(commits_verbose))
-    for commit_verbose in commits_verbose:
-        logger.info("processing commit %s", commit_verbose.id)
+    num_commits_verbose = len(commits_verbose)
+    logger.info("num commits verbose: %i", num_commits_verbose)
+    for commit_nr, commit_verbose in enumerate(commits_verbose):
+        logger.info("processing commit %s (%i / %i)", commit_verbose.id, commit_nr + 1, num_commits_verbose)
         # fetch verbose CES
         ces_verbose = {}
         ces_verbose_by_id = {}
