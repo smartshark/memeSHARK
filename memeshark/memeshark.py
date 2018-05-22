@@ -3,10 +3,12 @@ import multiprocessing
 import sys
 import time
 import timeit
+from math import isnan
 from multiprocessing import Queue
 
 import networkx as nx
 from mongoengine import connect, DoesNotExist, connection
+from mongoengine.base.datastructures import BaseDict
 from pycoshark.mongomodels import Project, VCSSystem, Commit, CodeEntityState
 from pycoshark.utils import create_mongodb_uri_string
 
@@ -122,7 +124,7 @@ class MemeSHARK(object):
                 try:
                     p1 = Commit.objects.get(vcs_system_id=vcs_id, revision_hash=p)
                     g.add_edge(p1.id, c.id)
-                except Commit.DoesNotExist:
+                except DoesNotExist:
                     self.logger.warning("parent of a commit is missing (commit id: %s - revision_hash: %s)", c.id, p)
                     pass
         return g
@@ -228,6 +230,9 @@ class MemeSHARKWorker(multiprocessing.Process):
             ces_current_state = {}  # contains CES that will be added to commit
             ces_map = {}  # for updating self-references
             ces_unchanged = []  # stores CES to be deleted
+            ces_unchanged_parents = {}  # parents of the CES to be deleted
+            ces_changed = []  # stores CES that are updated
+            ces_this = {}  # map from IDs from current commit to CES
 
             # check if CES are already appended to commit, if yes fetch current state from commit and skip merging
             current_commit = Commit.objects(id=node).get()
@@ -245,9 +250,11 @@ class MemeSHARKWorker(multiprocessing.Process):
                         ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
             else:
                 for ces in CodeEntityState.objects(commit_id=node):
+                    ces_this[ces.id] = ces
                     if ces.long_name + ces.file_id.__str__() not in ces_past_state:
                         ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                         ces_map[ces.id] = ces.id
+                        ces_changed.append(ces.id)
                     else:
                         ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
                         old, new = self._compare_dicts(ces_past, ces,
@@ -255,10 +262,25 @@ class MemeSHARKWorker(multiprocessing.Process):
                         if len(new.keys()) > 0 or len(old.keys()) > 0:
                             ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                             ces_map[ces.id] = ces.id
+                            ces_changed.append(ces.id)
                         else:
                             ces_current_state[ces.long_name + ces.file_id.__str__()] = ces_past
                             ces_map[ces.id] = ces_past.id
                             ces_unchanged.append(ces.id)
+                            ces_unchanged_parents[ces.id] = ces.ce_parent_id
+
+                # check if parent changed; if yes, the CES must be updated, too
+                saved_children = True
+                while saved_children:
+                    saved_children = False
+                    for ces in ces_unchanged:
+                        if ces_unchanged_parents[ces] in ces_changed:
+                            saved_children = True
+                            ces_object = ces_this[ces]
+                            ces_map[ces] = ces_object
+                            ces_current_state[ces_object.long_name + ces_object.file_id.__str__()] = ces_object
+                            ces_changed.append(ces)
+                            ces_unchanged.remove(ces)
 
                 self._add_ces_to_commit(node, ces_current_state)
                 self._update_ces(node, ces_current_state, ces_unchanged, ces_map)
@@ -341,10 +363,31 @@ class MemeSHARKWorker(multiprocessing.Process):
             try:
                 value1 = getattr(obj1, key)
                 value2 = getattr(obj2, key)
-                if value1 != value2:
-                    old.update({key: getattr(obj1, key)})
-                    new.update({key: getattr(obj2, key)})
+                if type(value1) is BaseDict and type(value2) is BaseDict:
+                    old_dicts, new_dicts = self._compare_basedicts(value1, value2)
+                    if len(new_dicts.keys()) > 0 or len(old_dicts.keys()) > 0:
+                        old.update({key: value1})
+                        new.update({key: value2})
+                else:
+                    if value1 != value2:
+                        old.update({key: getattr(obj1, key)})
+                        new.update({key: getattr(obj2, key)})
             except KeyError:
                 old.update({key: getattr(obj1, key)})
+        return old, new
 
+    def _compare_basedicts(self, obj1, obj2):
+        keys = obj1.keys()
+        old, new = {}, {}
+        for key in keys:
+            try:
+                value1 = obj1.get(key)
+                value2 = obj2.get(key)
+                if isnan(value1) and isnan(value2):
+                    continue
+                if value1 != value2:
+                    old.update({key: value1})
+                    new.update({key: value2})
+            except KeyError:
+                old.update({key: getattr(obj1, key)})
         return old, new
