@@ -257,9 +257,8 @@ class MemeSHARKWorker(multiprocessing.Process):
                         ces_changed.append(ces.id)
                     else:
                         ces_past = ces_past_state[ces.long_name + ces.file_id.__str__()]
-                        old, new = self._compare_dicts(ces_past, ces,
-                                                       {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
-                        if len(new.keys()) > 0 or len(old.keys()) > 0:
+                        if not self._compare_dicts(ces_past, ces,
+                                                   {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'}):
                             ces_current_state[ces.long_name + ces.file_id.__str__()] = ces
                             ces_map[ces.id] = ces.id
                             ces_changed.append(ces.id)
@@ -302,8 +301,6 @@ class MemeSHARKWorker(multiprocessing.Process):
                         self.logger.info("Skipping merging for start of branch, because of #parents!=1 (%i): %s",
                                          num_pred, succnode)
                 return
-
-
 
     def _add_ces_to_commit(self, node, current_state):
         """
@@ -353,10 +350,9 @@ class MemeSHARKWorker(multiprocessing.Process):
         :param obj1: first dict
         :param obj2: second dict
         :param excluded_keys: keys that are ignored
-        :return: two dicts: old for the state in the obj1, new for the state in obj2 in case of differences
+        :return: true if match, false otherwise
         """
         keys = obj1._fields_ordered
-        old, new = {}, {}
         for key in keys:
             if key in excluded_keys:
                 continue
@@ -364,21 +360,17 @@ class MemeSHARKWorker(multiprocessing.Process):
                 value1 = getattr(obj1, key)
                 value2 = getattr(obj2, key)
                 if type(value1) is BaseDict and type(value2) is BaseDict:
-                    old_dicts, new_dicts = self._compare_basedicts(value1, value2)
-                    if len(new_dicts.keys()) > 0 or len(old_dicts.keys()) > 0:
-                        old.update({key: value1})
-                        new.update({key: value2})
+                    if not self._compare_basedicts(value1, value2):
+                        return False
                 else:
                     if value1 != value2:
-                        old.update({key: getattr(obj1, key)})
-                        new.update({key: getattr(obj2, key)})
+                        return False
             except KeyError:
-                old.update({key: getattr(obj1, key)})
-        return old, new
+                return False
+        return True
 
     def _compare_basedicts(self, obj1, obj2):
         keys = obj1.keys()
-        old, new = {}, {}
         for key in keys:
             try:
                 value1 = obj1.get(key)
@@ -386,8 +378,7 @@ class MemeSHARKWorker(multiprocessing.Process):
                 if isnan(value1) and isnan(value2):
                     continue
                 if value1 != value2:
-                    old.update({key: value1})
-                    new.update({key: value2})
+                    return False
             except KeyError:
-                old.update({key: getattr(obj1, key)})
-        return old, new
+                return False
+        return True
