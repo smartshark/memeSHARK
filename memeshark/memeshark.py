@@ -341,8 +341,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         self.logger.info("deleting %i of %i code entity states", len(ces_unchanged), no_ces)
         self.total_ces_queue.put(no_ces)
         self.deleted_ces_queue.put(len(ces_unchanged))
-        for cesid in ces_unchanged:
-            CodeEntityState.objects(id=cesid).delete()
+        CodeEntityState.objects(id__in=ces_unchanged).delete()
 
     def _compare_dicts(self, obj1, obj2, excluded_keys):
         """
