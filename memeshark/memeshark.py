@@ -308,6 +308,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         :param node: the commit
         :param current_state: the code entity stats
         """
+        self.logger.info("adding code entity states to commit")
         commit = Commit.objects(id=node).get()
         ids = []
         for i, ces in current_state.items():
@@ -323,6 +324,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         :param ces_unchanged: the code entity states that did not change in a commit and are, therefore, deleted
         :param ces_map: a mapping of the IDs of code entity states in this commits to their representation that is kept
         """
+        self.logger.info("updating broken parent references")
         for i, ces in ces_current_state.items():
             if ces.commit_id != node:
                 continue  # skip CES from previous commits
