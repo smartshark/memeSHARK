@@ -115,14 +115,14 @@ class MemeSHARK(object):
         """
         g = nx.DiGraph()
         # first we add all nodes to the graph
-        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
+        for c in Commit.objects.only('id').timeout(False).filter(vcs_system_id=vcs_id):
             g.add_node(c.id)
 
         # after that we draw all edges
-        for c in Commit.objects.timeout(False).filter(vcs_system_id=vcs_id):
+        for c in Commit.objects.only('id', 'parents').timeout(False).filter(vcs_system_id=vcs_id):
             for p in c.parents:
                 try:
-                    p1 = Commit.objects.get(vcs_system_id=vcs_id, revision_hash=p)
+                    p1 = Commit.objects.only('id').timeout(False).get(vcs_system_id=vcs_id, revision_hash=p)
                     g.add_edge(p1.id, c.id)
                 except DoesNotExist:
                     self.logger.warning("parent of a commit is missing (commit id: %s - revision_hash: %s)", c.id, p)
