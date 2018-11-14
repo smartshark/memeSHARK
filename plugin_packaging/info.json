@@ -79,7 +79,7 @@
             "description": "databse against which users are authenticated"
         },
         {
-            "name": "debug",
+            "name": "log_level",
             "required": false,
             "position": 9,
             "type": "execute",
