@@ -8,7 +8,7 @@ import sys
 from dictdiffer import diff
 from mongoengine import connect, DoesNotExist
 from mongoengine.context_managers import switch_db
-from pycoshark.mongomodels import Commit, CodeEntityState, Project, VCSSystem
+from pycoshark.mongomodels import Commit, CodeEntityState, Project, VCSSystem, File
 from pycoshark.utils import create_mongodb_uri_string
 
 
@@ -63,7 +63,8 @@ def start():
 
     parser.add_argument('--debug', help='Sets the debug level.', default='DEBUG',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
-    parser.add_argument('-n', '--project-name', help='Name of the project to compress.', default=None)
+    parser.add_argument('--project-name1', help='Name of the project.', default=None)
+    parser.add_argument('--project-name2', help='Name of the project.', default=None)
 
     args = parser.parse_args()
 
@@ -84,23 +85,39 @@ def start():
     # fetch all verbose commmits
     commits_verbose = []
     with switch_db(Commit, 'db-verbose') as CommitVerbose:
-        if args.project_name is None:
-            # no project specified, fetch all commits
-            commit_objects = CommitVerbose.objects()
-        else:
-            # fetch only commits for selected project
-            try:
-                project_id = Project.objects(name=args.project_name).get().id
-            except DoesNotExist:
-                logger.error('Project %s not found!' % args.project_name)
-                sys.exit(1)
-            vcs_systems = VCSSystem.objects(project_id=project_id).get().id
-            logger.info("vcs_system_id: %s", vcs_systems)
-            commit_objects = Commit.objects(vcs_system_id=vcs_systems)
+        # fetch only commits for selected project
+        try:
+            project_id = Project.objects(name=args.project_name2).get().id
+        except DoesNotExist:
+            logger.error('Project %s not found!' % args.project_name2)
+            sys.exit(1)
+        vcs_systems = VCSSystem.objects(project_id=project_id).get().id
+        logger.info("vcs_system_id: %s", vcs_systems)
+        commit_objects = Commit.objects(vcs_system_id=vcs_systems)
 
-        # Update for only selecting single projects should be here
         for cur_commit_verbose in commit_objects:
             commits_verbose.append(cur_commit_verbose)
+
+    with switch_db(VCSSystem, 'default') as VCSSystemCondensed:
+        # fetch only commits for selected project
+        try:
+            project_id = Project.objects(name=args.project_name1).get().id
+        except DoesNotExist:
+            logger.error('Project %s not found!' % args.project_name1)
+            sys.exit(1)
+        vcs_systems_condensed = VCSSystemCondensed.objects(project_id=project_id).get().id
+
+    # fetch files verbose
+    with switch_db(File, 'db-verbose') as FilesVerbose:
+        files_verbose = {}
+        for cur_file_verbose in FilesVerbose.objects(vcs_system_id=vcs_systems):
+            files_verbose[cur_file_verbose.id] = cur_file_verbose.path
+
+    with switch_db(File, 'default') as FilesCondensed:
+        files_condensed = {}
+        for cur_file_condensed in FilesCondensed.objects(vcs_system_id=vcs_systems_condensed):
+            files_condensed[cur_file_condensed.id] = cur_file_condensed.path
+
     num_commits_verbose = len(commits_verbose)
     logger.info("num commits verbose: %i", num_commits_verbose)
     for commit_nr, commit_verbose in enumerate(commits_verbose):
@@ -110,13 +127,17 @@ def start():
         ces_verbose_by_id = {}
         with switch_db(CodeEntityState, 'db-verbose') as CodeEntityStateVerbose:
             for cur_ces_verbose in CodeEntityStateVerbose.objects(commit_id=commit_verbose.id):
-                ces_verbose[cur_ces_verbose.long_name + str(cur_ces_verbose.file_id)] = cur_ces_verbose
+                ces_verbose[cur_ces_verbose.long_name + files_verbose[cur_ces_verbose.file_id]] = cur_ces_verbose
                 ces_verbose_by_id[cur_ces_verbose.id] = cur_ces_verbose
 
         # fetch same commit in condensed DB
-        commit_condensed = None
         with switch_db(Commit, 'default') as CommitCondensed:
-            commit_condensed = CommitCondensed.objects(id=commit_verbose.id).get()
+            try:
+                commit_condensed = CommitCondensed.objects(revision_hash=commit_verbose.revision_hash,
+                                                           vcs_system_id=vcs_systems_condensed).get()
+            except:
+                logger.info("commit %s not found in condensed db", commit_verbose.revision_hash)
+                continue
 
         # fetch CES from condensed DB
         ces_condensed = {}
@@ -124,7 +145,8 @@ def start():
         with switch_db(CodeEntityState, 'default') as CodeEntityStateCondensed:
             for ces_id in commit_condensed.code_entity_states:
                 cur_ces_condensed = CodeEntityStateCondensed.objects(id=ces_id).get()
-                ces_condensed[cur_ces_condensed.long_name + str(cur_ces_condensed.file_id)] = cur_ces_condensed
+                ces_condensed[
+                    cur_ces_condensed.long_name + files_condensed[cur_ces_condensed.file_id]] = cur_ces_condensed
                 ces_condensed_by_id[cur_ces_condensed.id] = cur_ces_condensed
 
         logger.info("num CES verbose  : %i", len(ces_verbose.keys()))
@@ -140,7 +162,7 @@ def start():
 
             cur_ces_condensed = ces_condensed[long_name_verbose]
             old, new = compare_dicts(cur_ces_verbose, cur_ces_condensed,
-                                             {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
+                                     {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids', 'file_id'})
             if len(new.keys()) > 0 or len(old.keys()) > 0:
                 logger.error("CES with long_name %s (id verbose: %s /id condensed %s) not equal!", long_name_verbose,
                              cur_ces_verbose.id, cur_ces_condensed.id)
@@ -154,7 +176,7 @@ def start():
             ces_parent_condensed = ces_condensed_by_id[cur_ces_condensed.id]
             old, new = compare_dicts\
                 (ces_parent_verbose, ces_parent_condensed,
-                                             {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids'})
+                 {'id', 's_key', 'commit_id', 'ce_parent_id', 'cg_ids', 'file_id'})
             if len(new.keys()) > 0 or len(old.keys()) > 0:
                 logger.error("ce_parent of CES with long_name %s not equal!", long_name_verbose)
                 logger.error("verbose  : %s", old)

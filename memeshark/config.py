@@ -43,7 +43,7 @@ class Config(object):
         self.password = args.db_password
         self.database = args.db_database
         self.authentication_db = args.db_authentication
-        self.debug = args.debug
+        self.debug = args.log_level
         self.project_name = args.project_name
         self.processes = int(args.processes)
         self.ssl_enabled = args.ssl
@@ -64,7 +64,7 @@ class Config(object):
 
     def __str__(self):
         return "Config: host: %s, port: %s, user: %s, " \
-               "password: %s, database: %s, authentication_db: %s, ssl: %s, project_name:%s, processes: %sdebug: %s" % \
+               "password: %s, database: %s, authentication_db: %s, ssl: %s, project_name:%s, processes: %s, log_level: %s" % \
                (
                    self.host,
                    self.port,
@@ -74,8 +74,8 @@ class Config(object):
                    self.authentication_db,
                    self.ssl_enabled,
                    self.project_name,
+                   self.processes,
                    self.debug,
-                   self.processes
                )
 
 

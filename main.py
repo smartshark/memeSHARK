@@ -17,7 +17,7 @@ def start():
     logger.info("Starting memeSHARK...")
 
     parser = get_base_argparser('Plugin to remove code entities and code groups that did not change in a revision.', '0.1.0')
-    parser.add_argument('--debug', help='Sets the debug level.', default='DEBUG',
+    parser.add_argument('--log-level', help='Sets the debug level.', default='DEBUG',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
     parser.add_argument('-n', '--project-name', help='Name of the project to compress.', required=True)
     parser.add_argument('-c', '--processes', help='Number of parallel processes.', default=1)
