@@ -93,8 +93,7 @@ Because the **memeSHARK** usually deletes large amounts of data and instead adds
 we recommend to always perform a backup before running the memeSHARK. In case there is a crash while the memeSHARK
 updates existing code entity states, the database may be in an invalid state that cannot be recovered anymore. 
 
-Additionally, we provide a consistency checker for the **memeSHARK**. The consistency checker can be found under 
-~/memeSHARK/test/consistency_checker.py.
+Additionally, we provide a consistency_checker.py script for the **memeSHARK**. 
 In case a backup of the database before running the **memeSHARK** is available in a running MongoDB instance, the
 consistency checker can compare the condensed database that the **memeSHARK** created and validate that the 
 code entity states are equal for all commits (except their IDs and the referenced commit IDs). 
