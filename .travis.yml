@@ -21,7 +21,7 @@ after_success:
 
 deploy:
   provider: releases
-  api_key: ${TRAVIS_GH_TOKEN}
+  api_key: ${GH_TOKEN}
   file: "plugin_packaging/memeSHARK.tar"
   skip_cleanup: true
   on:
