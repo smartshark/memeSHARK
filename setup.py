@@ -15,7 +15,6 @@ setup(
     author_email='herbold@cs.uni-goettingen.de',
     description='Condense code entities to remove duplicates',
     install_requires=['mongoengine', 'pymongo', 'pycoshark>=1.0.21', 'networkx>=2.0', 'dictdiffer'],
-    dependency_links=['git+https://github.com/smartshark/pycoSHARK.git@1.0.21#egg=pycoshark-1.0.21'],
     url='https://github.com/smartshark/memeSHARK',
     download_url='https://github.com/smartshark/memeSHARK/zipball/master',
     packages=find_packages(),
