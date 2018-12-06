@@ -41,7 +41,7 @@ Afterwards, the installation of **memeSHARK** can be done in two different ways.
 
 ### via Pip
 ```
-$ sudo pip3 install https/githum.com/smartshark/memeSHARK/zipball/master --process-dependency-links
+$ sudo pip3 install https/githum.com/smartshark/memeSHARK/zipball/master
 ```
 
 ### via git clone and setup.py
