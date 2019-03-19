@@ -353,7 +353,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         :param excluded_keys: keys that are ignored
         :return: true if match, false otherwise
         """
-        keys = obj1._fields_ordered
+        keys = set(obj1._fields_ordered + obj2._fields_ordered)
         for key in keys:
             if key in excluded_keys:
                 continue
@@ -371,7 +371,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         return True
 
     def _compare_basedicts(self, obj1, obj2):
-        keys = obj1.keys()
+        keys = set(obj1.keys() + obj2.keys())
         for key in keys:
             try:
                 value1 = obj1.get(key)
