@@ -371,7 +371,7 @@ class MemeSHARKWorker(multiprocessing.Process):
         return True
 
     def _compare_basedicts(self, obj1, obj2):
-        keys = set(obj1.keys() + obj2.keys())
+        keys = set(list(obj1.keys()) + list(obj2.keys()))
         for key in keys:
             try:
                 value1 = obj1.get(key)
