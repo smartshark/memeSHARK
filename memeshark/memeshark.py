@@ -374,8 +374,8 @@ class MemeSHARKWorker(multiprocessing.Process):
         keys = set(list(obj1.keys()) + list(obj2.keys()))
         for key in keys:
             try:
-                value1 = obj1.get(key)
-                value2 = obj2.get(key)
+                value1 = obj1[key]
+                value2 = obj2[key]
                 if isnan(value1) and isnan(value2):
                     continue
                 if value1 != value2:
