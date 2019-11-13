@@ -22,7 +22,7 @@ after_success:
 deploy:
   provider: releases
   api_key: ${GH_TOKEN}
-  file: "plugin_packaging/memeSHARK.tar"
+  file: "plugin_packaging/memeSHARK_plugin.tar"
   skip_cleanup: true
   on:
     repo: smartshark/memeSHARK
